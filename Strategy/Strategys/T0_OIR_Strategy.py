@@ -6,13 +6,13 @@
 import numpy as np
 import datetime as dt
 from typing import Dict
-from constant import Interval, Direction
+from constant import Interval, Direction, OrderType
 from Strategy.template import StrategyTemplate
 from utility import ArrayManager, BarGenerator
 from object import (BarData, TradeData, OrderData)
 
 
-class T0Strategy(StrategyTemplate):
+class T0OIRStrategy(StrategyTemplate):
 
     pos_all = {}  # Number of tradable lots
     pos_remain = {}
@@ -23,7 +23,6 @@ class T0Strategy(StrategyTemplate):
 
         # self.bgs: Dict[str, BarGenerator] = {}
         self.ams: Dict[str, ArrayManager] = {}
-        self.test = 0
         for vt_symbol in self.vt_symbols:
             # self.bgs[vt_symbol] = BarGenerator(self.on_bar, interval=Interval.TICK)
             self.ams[vt_symbol] = ArrayManager(size=2)
@@ -42,7 +41,6 @@ class T0Strategy(StrategyTemplate):
         """
         Callback of new tick data update.
         """
-        self.test += 1
         if self.inited and '09:30:00' <= bar.time <= '14:56:00':  # TODO 时间条件 + 仓位条件 + 风控，收盘前必须平仓
             self.ams[bar.vt_symbol].update_bar(bar)
 
@@ -53,7 +51,7 @@ class T0Strategy(StrategyTemplate):
     def on_OIR(self, bar: BarData):
 
         id_ = bar.vt_symbol
-        if self.pos_remain[id_] != 0 or self.pos[id_] != self.pos_all[id_]:  # 存在可T量同时或头寸未回填满，则进行交易
+        if self.pos_remain[id_] != 0 or self.pos[id_] != self.pos_all[id_]:  # 存在可T量或头寸未回填满，则进行交易
             # print(f"剩余：{self.pos_remain[id_]}, 实际：{self.pos[id_]}")
             VOL_A = self.ams[id_].indicators['VOL_A']
             VOL_B = self.ams[id_].indicators['VOL_B']
@@ -83,21 +81,13 @@ class T0Strategy(StrategyTemplate):
 
                     if OIR > 0.5 and self.pos[id_] != self.pos_all[id_]:
                         self.buy(bar.symbol, bar.exchange, ask_price_1[-1],
-                                 min(bar.ask_volume_1, self.pos_all[id_] - self.pos[id_]))
+                                 min(bar.ask_volume_1, self.pos_all[id_] - self.pos[id_]), OrderType.PAPER)
 
                     if OIR < - 0.5 and self.pos_remain[id_] != 0:
+                        if min(bar.bid_volume_1, self.pos_remain[id_]) < 0:
+                            print('s')
                         self.sell(bar.symbol, bar.exchange, bid_price_1[-1],
-                                  min(bar.bid_volume_1, self.pos_remain[id_]))
-        # if ('09:30:00' < bar.time < '14:57:00') and bar.symbol != '000002':
-        #     if bar.open_price > 12.7 and self.pos_remain[bar.vt_symbol] > 0:
-        #         self.sell(bar.symbol, bar.exchange, 12.7,
-        #                   min(bar.bid_volume_1, self.pos_remain[bar.vt_symbol]))
-        #
-        #     if bar.open_price < 12.65 and \
-        #             self.pos_remain[bar.vt_symbol] < self.pos_all[bar.vt_symbol] and \
-        #             self.pos[bar.vt_symbol] < self.pos_all[bar.vt_symbol]:
-        #         self.buy(bar.symbol, bar.exchange, 12.65,
-        #                  min(bar.ask_volume_1, self.pos_all[bar.vt_symbol] - self.pos[bar.vt_symbol]))
+                                  min(bar.bid_volume_1, self.pos_remain[id_]), OrderType.PAPER)
 
     def on_order(self, order: OrderData):
         """

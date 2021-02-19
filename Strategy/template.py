@@ -3,7 +3,7 @@ from abc import ABC
 from collections import defaultdict
 from typing import Any, Callable, List, Dict
 
-from constant import Interval, Direction, Exchange
+from constant import Interval, Direction, Exchange, OrderType
 from object import BarData, OrderData, TradeData
 
 
@@ -63,23 +63,23 @@ class StrategyTemplate(ABC):
         """
         pass
 
-    def buy(self, symbol: str, exchange: Exchange, price: float, volume: float):
+    def buy(self, symbol: str, exchange: Exchange, price: float, volume: float, orderType: OrderType):
         """
         Send buy order to open a long position.
         """
-        return self.send_order(symbol, exchange, Direction.LONG, price, volume)
+        return self.send_order(symbol, exchange, Direction.LONG, price, volume, orderType)
 
-    def sell(self, symbol: str, exchange: Exchange, price: float, volume: float):
+    def sell(self, symbol: str, exchange: Exchange, price: float, volume: float, orderType: OrderType):
         """
         Send sell order to close a long position.
         """
-        return self.send_order(symbol, exchange, Direction.SHORT, price, volume)
+        return self.send_order(symbol, exchange, Direction.SHORT, price, volume, orderType)
 
-    def send_order(self, symbol: str, exchange: Exchange, direction: Direction, price: float, volume: float):
+    def send_order(self, symbol: str, exchange: Exchange, direction: Direction, price: float, volume: float, orderType: OrderType):
         """
         Send a new order.
         """
-        vt_order_ids = self.engine.send_order(symbol, exchange, direction, price, volume)
+        vt_order_ids = self.engine.send_order(symbol, exchange, direction, price, volume, orderType)
         return vt_order_ids
 
     def cancel_order(self, vt_order_id: str):

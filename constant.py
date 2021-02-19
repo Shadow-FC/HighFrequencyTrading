@@ -51,7 +51,7 @@ class OrderType(Enum):
     STOP = "STOP"
     FAK = "FAK"
     FOK = "FOK"
-    RFQ = "询价"
+    PAPER = "理论价格"
 
 
 @unique

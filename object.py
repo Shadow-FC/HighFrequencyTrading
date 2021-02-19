@@ -6,7 +6,7 @@
 import pandas as pd
 from dataclasses import dataclass, field
 from datetime import datetime
-from constant import Interval, Offset, Direction, Exchange, Status
+from constant import Interval, Offset, Direction, Exchange, Status, OrderType
 from typing import Any, Callable, Dict, Tuple, List
 
 
@@ -22,13 +22,16 @@ class BarData:
     exchange: Exchange
     interval: Interval = None
 
+    raw: Any = None
+
     volume: float = 0
+    amount: float = 0
     open_price: float = 0
     high_price: float = 0
     low_price: float = 0
     close_price: float = 0
 
-    test: Any = None
+    preClose_price: float = 0
 
     bid_price_1: float = 0
     bid_price_2: float = 0
@@ -54,6 +57,13 @@ class BarData:
     ask_volume_4: float = 0
     ask_volume_5: float = 0
 
+    order_type: str = None
+    buy_order_volume: float = 0
+    sale_order_volume: float = 0
+
+    buy_order_price: float = 0
+    sale_order_price: float = 0
+
     def __post_init__(self):
         self.vt_symbol = f"{self.symbol}.{self.exchange.value}"
 
@@ -69,6 +79,7 @@ class OrderData:
     order_id: str
     status: Status
     exchange: Exchange
+    order_type: OrderType
 
     direction: Direction = None
     price: float = 0
@@ -111,6 +122,7 @@ class ApiData:
     symbol: str
     process: Callable = field(default_factory=dict)
     data: Dict[Tuple[str], pd.Series] = field(default_factory=dict)
+    open_price: float = 0
 
 
 @dataclass

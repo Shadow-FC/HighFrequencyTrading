@@ -4,6 +4,7 @@
 # @Email:  18817289038@163.com
 
 import time
+import logging
 import traceback
 import numpy as np
 import pandas as pd
@@ -13,17 +14,16 @@ from collections import defaultdict
 from typing import Callable, List, Dict, Union
 
 from utility import msgPrint, round_to
-from constant import Direction, Exchange, Status
+from constant import Direction, Exchange, Status, OrderType, KeyName as KN
 from GateWay.LocalGateway import LocalGateway, load_data
 from object import BarData, TradeData, OrderData, EncapsulationData
-
-exchangeM = {"深圳": "SZSE",
-             "上海": "SSE"}
 
 
 class T0BackTestingEngine:
     """"""
     start_time: dt.datetime = dt.datetime(2020, 12, 31, 9, 15)
+
+    API_Para = {}
 
     def __init__(self):
         """"""
@@ -45,9 +45,9 @@ class T0BackTestingEngine:
         self.history_data: EncapsulationData = EncapsulationData()  # 历史数据容器
         self.dataOrder = None
 
-        self.limit_order_count: int = 0
-        self.limit_orders: Dict[str, OrderData] = {}
-        self.active_limit_orders: Dict[str, OrderData] = {}
+        self.order_count: int = 0
+        self.orders: Dict[str, OrderData] = {}
+        self.active_orders: Dict[str, OrderData] = {}
 
         self.trade_count: int = 0
 
@@ -81,150 +81,19 @@ class T0BackTestingEngine:
         self.daily_results = {k: DailyResult(self.dateD, k, setting.get('pos', {}).get(k, 0), self.capital)
                               for k in self.vt_symbols}
 
-    # def load_data(self):
-    #     # msgPrint("开始加载历史数据")
-    #
-    #     self.history_data.clear()  # Clear previously loaded history data
-    #
-    #     dataNum = 0
-    #     for symbol in self.vt_symbols:
-    #         data = load_data(symbol, self.dateD, 'DEPTH')  # 参数： 读取数据类型
-    #         self.history_data.append(data)
-    #         dataNum += data.shape[0]
-    #
-    #     msgPrint(f"历史数据加载完成，symbol num: {len(self.vt_symbols)}, data num：{dataNum}")
-    #
-    # def run_backtesting(self):
-    #     """"""
-    #
-    #     self.load_data()
-    #
-    #     # init strategy
-    #     self.strategy.on_init()
-    #
-    #     # Use the first minutes of history data for initializing strategy
-    #     dataInput = pd.concat(self.history_data)
-    #     if dataInput.empty:
-    #         return pd.DataFrame()
-    #
-    #     dataInput = dataInput.sort_values(by='时间')  # TODO 如果数据只精确到秒，会出问题
-    #     dateInit = (self.start_time + dt.timedelta(minutes=self.minutes)).strftime("%H:%M:%S")
-    #     dataInit = dataInput[dataInput['时间'] <= dateInit]
-    #
-    #     for ix, data in dataInit.iterrows():
-    #
-    #         try:
-    #             bar = BarData(
-    #                 symbol=f"{data['代码']:>06}",
-    #                 exchange=Exchange[exchangeM[data['市场']]],
-    #                 interval=self.interval,
-    #                 datetime=dt.datetime.strptime(data['时间'], "%Y-%m-%d %H:%M:%S"),
-    #                 time=data['时间'].split(" ")[-1],
-    #
-    #                 volume=data['总量'],  # 累积，暂且替代
-    #                 open_price=data['最新价'],
-    #                 low_price=data['最新价'],
-    #                 high_price=data['最新价'],
-    #                 close_price=data['最新价'],
-    #
-    #                 ask_price_1=data['挂卖价1'],
-    #                 ask_price_2=data['挂卖价2'],
-    #                 ask_price_3=data['挂卖价3'],
-    #                 ask_price_4=data['挂卖价4'],
-    #                 ask_price_5=data['挂卖价5'],
-    #
-    #                 ask_volume_1=data['挂卖量1'],
-    #                 ask_volume_2=data['挂卖量2'],
-    #                 ask_volume_3=data['挂卖量3'],
-    #                 ask_volume_4=data['挂卖量4'],
-    #                 ask_volume_5=data['挂卖量5'],
-    #
-    #                 bid_price_1=data['挂买价1'],
-    #                 bid_price_2=data['挂买价2'],
-    #                 bid_price_3=data['挂买价3'],
-    #                 bid_price_4=data['挂买价4'],
-    #                 bid_price_5=data['挂买价5'],
-    #
-    #                 bid_volume_1=data['挂买量1'],
-    #                 bid_volume_2=data['挂买量2'],
-    #                 bid_volume_3=data['挂买量3'],
-    #                 bid_volume_4=data['挂买量4'],
-    #                 bid_volume_5=data['挂买量5'],
-    #                 test=data
-    #             )
-    #             self.callback(bar)
-    #         except Exception:
-    #             msgPrint("触发异常，回测终止")
-    #             msgPrint(traceback.format_exc())
-    #             return
-    #
-    #     self.strategy.inited = True
-    #
-    #     # Use the rest of history data for running backtesting
-    #     dataPlayback = dataInput[dataInput['时间'] > dateInit]
-    #
-    #     for ix, data in dataPlayback.iterrows():
-    #         try:
-    #             bar = BarData(
-    #                 symbol=f"{data['代码']:>06}",
-    #                 exchange=Exchange[exchangeM[data['市场']]],
-    #                 interval=self.interval,
-    #                 datetime=dt.datetime.strptime(data['时间'], "%Y-%m-%d %H:%M:%S"),
-    #                 time=data['时间'].split(" ")[-1],
-    #
-    #                 volume=data['总量'],  # 累积，暂且替代
-    #                 open_price=data['最新价'],
-    #                 low_price=data['最新价'],
-    #                 high_price=data['最新价'],
-    #                 close_price=data['最新价'],
-    #
-    #                 ask_price_1=data['挂卖价1'],
-    #                 ask_price_2=data['挂卖价2'],
-    #                 ask_price_3=data['挂卖价3'],
-    #                 ask_price_4=data['挂卖价4'],
-    #                 ask_price_5=data['挂卖价5'],
-    #
-    #                 ask_volume_1=data['挂卖量1'],
-    #                 ask_volume_2=data['挂卖量2'],
-    #                 ask_volume_3=data['挂卖量3'],
-    #                 ask_volume_4=data['挂卖量4'],
-    #                 ask_volume_5=data['挂卖量5'],
-    #
-    #                 bid_price_1=data['挂买价1'],
-    #                 bid_price_2=data['挂买价2'],
-    #                 bid_price_3=data['挂买价3'],
-    #                 bid_price_4=data['挂买价4'],
-    #                 bid_price_5=data['挂买价5'],
-    #
-    #                 bid_volume_1=data['挂买量1'],
-    #                 bid_volume_2=data['挂买量2'],
-    #                 bid_volume_3=data['挂买量3'],
-    #                 bid_volume_4=data['挂买量4'],
-    #                 bid_volume_5=data['挂买量5'],
-    #                 test=data
-    #             )
-    #             self.new_bar(bar)
-    #         except Exception:
-    #             msgPrint("触发异常，回测终止")
-    #             msgPrint(traceback.format_exc())
-    #             return
-    #
-    #     res = self.calculate_result()
-    #
-    #     return res
-
     # load data for back to the test
     def load_data(self):
         """"""
         dataNum = 0
         for symbol in self.vt_symbols:
-            dataClass = self.database.load_data('stock', symbol, self.dateD, 'DEPTH')  # 参数： 读取数据类型
+            dataClass = self.database.load_data(symbol=symbol, date=self.dateD, **self.API_Para)  # 参数： 读取数据类型
             self.history_data.data.update(dataClass.data)
             self.history_data.process[str(symbol.split('.')[0])] = dataClass.process
+            self.daily_results[symbol].open_price = dataClass.open_price
             dataNum += len(dataClass.data.keys())
         self.history_data.generate_order()
 
-        msgPrint(f"Date: {self.dateD}, Symbol: {self.vt_symbols[0]}, data num：{dataNum}")
+        msgPrint(f"Date: {self.dateD}, Symbol: {self.vt_symbols}, data num：{dataNum}")
 
     # Begin to test
     def run_backtesting(self) -> Dict[str, pd.DataFrame]:
@@ -232,16 +101,12 @@ class T0BackTestingEngine:
 
         self.load_data()
 
-        self.capital = 526
-
         # init strategy  TODO
         self.strategy.on_init()
 
-        iterIndex = self.history_data.order
-
         self.strategy.inited = True
 
-        for index_ in iterIndex:
+        for index_ in self.history_data.order:
             try:
                 dataSet = self.history_data.data[index_]
                 bar = self.history_data.process[str(index_[-1])](dataSet)
@@ -260,13 +125,22 @@ class T0BackTestingEngine:
         self.datetime = bar.datetime
 
         # limit order
-        self.cross_limit_order(bar)
+        self.cross_order(bar)
         self.onBar(bar)
 
-    def cross_limit_order(self, bar: BarData):
+    def cross_order(self, bar: BarData):
         """
-        Cross limit order with last bar data.
-        价格低于目标价，则买进，即优价成交
+        Cross order with last bar data.
+        if order type == LIMIT:
+            价格低于目标价，则买进，即优价成交
+        elif orderType == MARKET:
+            市场最优价成交(开盘价成交)
+        elif orderType == PAPER:
+            按照提交价格成交
+        else:
+            不交易
+
+        默认全部成交
         """
 
         long_cross_price = bar.low_price
@@ -274,18 +148,24 @@ class T0BackTestingEngine:
         long_best_price = bar.open_price
         short_best_price = bar.open_price
 
-        for order in list(self.active_limit_orders.values()):
+        for order in list(self.active_orders.values()):
             if order.symbol == bar.symbol:
                 # Push order update with status "not traded" (pending).
                 if order.status == Status.SUBMITTING:
                     order.status = Status.NOTTRADED
                     self.strategy.on_order(order)
 
-                # Check whether limit orders can be filled.
-                long_cross = (order.direction == Direction.LONG and order.price >= long_cross_price > 0)
-
-                short_cross = (
-                        order.direction == Direction.SHORT and order.price <= short_cross_price and short_cross_price > 0)
+                if order.order_type == OrderType.LIMIT:
+                    # Check whether limit orders can be filled.
+                    long_cross = (order.direction == Direction.LONG and order.price >= long_cross_price > 0)
+                    short_cross = (
+                            order.direction == Direction.SHORT and order.price <= short_cross_price and short_cross_price > 0)
+                elif order.order_type in (OrderType.PAPER, OrderType.MARKET):
+                    # There's gonna be a deal
+                    long_cross = order.direction == Direction.LONG
+                    short_cross = order.direction == Direction.SHORT
+                else:
+                    long_cross = short_cross = False
 
                 if not long_cross and not short_cross:
                     continue
@@ -295,18 +175,20 @@ class T0BackTestingEngine:
                 order.status = Status.ALLTRADED
                 self.strategy.on_order(order)
 
-                self.active_limit_orders.pop(order.vt_order_id)
+                self.active_orders.pop(order.vt_order_id)
 
                 # Push trade update
                 self.trade_count += 1
 
                 # Assuming a complete transaction
-                if long_cross:
-                    trade_price = min(order.price, long_best_price)
-                    pos_change = order.volume
+                if order.order_type == OrderType.LIMIT:
+                    trade_price = min(order.price, long_best_price) if long_cross else max(order.price, short_best_price)
+                elif order.order_type == OrderType.MARKET:
+                    trade_price = long_best_price if long_cross else short_best_price
                 else:
-                    trade_price = max(order.price, short_best_price)
-                    pos_change = -order.volume
+                    trade_price = order.price
+
+                pos_change = order.volume if long_cross else -order.volume
 
                 trade = TradeData(
                     symbol=order.symbol,
@@ -337,24 +219,26 @@ class T0BackTestingEngine:
             direction: Direction,
             price: float,
             volume: float,
+            orderType: OrderType
     ) -> List[str]:
         """"""
         price = round_to(price, self.price_tick)
-        self.limit_order_count += 1
+        self.order_count += 1
 
         order = OrderData(
             symbol=symbol,
             exchange=exchange,
-            order_id=str(self.limit_order_count),
+            order_id=str(self.order_count),
             direction=direction,
+            order_type=orderType,
             price=price,
             volume=volume,
             status=Status.SUBMITTING,
             datetime=self.datetime
         )
 
-        self.active_limit_orders[order.vt_order_id] = order
-        self.limit_orders[order.vt_order_id] = order
+        self.active_orders[order.vt_order_id] = order
+        self.orders[order.vt_order_id] = order
 
         return [order.vt_order_id]
 
@@ -362,9 +246,9 @@ class T0BackTestingEngine:
         """
         Cancel order by vt_order_id.
         """
-        if vt_order_id not in self.active_limit_orders:
+        if vt_order_id not in self.active_orders:
             return
-        order = self.active_limit_orders.pop(vt_order_id)
+        order = self.active_orders.pop(vt_order_id)
 
         order.status = Status.CANCELLED
         self.strategy.on_order(order)
@@ -373,24 +257,26 @@ class T0BackTestingEngine:
         """
         Cancel all orders.
         """
-        vt_order_ids = list(self.active_limit_orders.keys())
+        vt_order_ids = list(self.active_orders.keys())
         for vt_order_id in vt_order_ids:
             self.cancel_order(vt_order_id)
 
     def calculate_result(self) -> Dict[str, pd.DataFrame]:
         """"""
         # Calculate daily result by iteration.
-        results = defaultdict(list)
         for symbol, daily_result in self.daily_results.items():
+            results = defaultdict(list)
 
             daily_result.calculate_pnl(self.size, self.rate, self.slippage)
+            daily_result.switchFormat()
             for key, value in daily_result.__dict__.items():
                 if key == 'trades':
                     continue
                 results[key].append(value)
 
-            self.daily_df[symbol] = pd.DataFrame(results).set_index('date')
+            self.daily_df[symbol] = pd.DataFrame(results).set_index(KN.TRADE_DATE.value)
 
+        # Multi-asset consolidation
         self.multi_asset_merger(self.daily_df)
 
         return self.daily_df
@@ -420,7 +306,11 @@ class DailyResult:
         self.start_pos = pos  # 起始头寸
         self.capital = capital  # 起始资金
 
+        self.open_price = 0  # 当天开盘价
         self.trades = []  # 交易记录
+
+        self.stock_account = 0
+        self.capital_account = 0  # 账户现金资产价值
 
         self.end_pos = 0  # 剩余头寸
         self.trade_long = 0  # long次数
@@ -431,7 +321,7 @@ class DailyResult:
 
         self.slippage = 0  # 滑点
 
-        self.account = 0  # 账户金额
+        self.account = 0  # 初始账户资产价值
 
     def add_trade(self, trade: TradeData):
         """"""
@@ -445,9 +335,12 @@ class DailyResult:
     ):
         """"""
 
-        # Trading pnl is the pnl from new trade during the day TODO 有问题
+        # Trading pnl is the pnl from new trade during the day
         self.end_pos = self.start_pos
-        self.account = self.capital
+        self.stock_account = self.open_price * self.end_pos * size
+        self.capital_account = self.capital
+
+        self.account = self.stock_account + self.capital
 
         for trade in self.trades:
             if trade.direction == Direction.LONG:
@@ -458,10 +351,21 @@ class DailyResult:
                 self.trade_short += 1
 
             self.end_pos += pos_change
+            self.stock_account = trade.price * self.end_pos * size
+
             turnover = trade.volume * size * trade.price
-            self.account -= pos_change * trade.price * size
+            self.capital_account -= pos_change * trade.price * size
             self.slippage += trade.volume * size * slippage
 
             self.turnover += turnover
             self.commission += turnover * rate
 
+    def switchFormat(self):
+        self.start_pos = [{self.symbol: self.start_pos}]
+        self.end_pos = [{self.symbol: self.end_pos}]
+        self.open_price = [{self.symbol: self.open_price}]
+        self.symbol = [self.symbol]
+
+
+class LogEngine(object):
+    pass
